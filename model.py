@@ -63,7 +63,7 @@ class STSGM(nn.Module):
         bg,ed = (0,self.L)
         self.ed = ed
         self.cond_drop_rate = cond_drop_rate
-        # self.train_loss = nn.CrossEntropyLoss(label_smoothing=0.0, reduction='mean') 
+        
         self.train_loss = nn.MSELoss(reduction='mean')
         self.norm_eps = norm_eps
         self.loss_weight = torch.ones(1, self.L, device='cuda') / self.L
@@ -145,37 +145,37 @@ class STSGM(nn.Module):
        
     
         if val_set_X.shape[0] > self.B:
-            # 生成随机索引
+           
             indices = torch.randperm(val_set_X.shape[0])[:self.B]
-            # 使用索引选择样本
+            
             val_set_X = val_set_X[indices]
             val_set_X_ori = val_set_X_ori[indices]
         elif val_set_X.shape[0] < self.B:
-            # 如果样本数量不足self.B，则需要进行重复采样
-            num_repeats = (self.B + val_set_X.shape[0] - 1) // val_set_X.shape[0]  # 向上取整
-            # 重复数据集
+           
+            num_repeats = (self.B + val_set_X.shape[0] - 1) // val_set_X.shape[0]  
+            
             repeated_val_set_X = val_set_X.repeat(num_repeats, 1, 1)
             repeated_val_set_X_ori = val_set_X_ori.repeat(num_repeats, 1, 1)
-            # 从重复后的数据集中选择self.B个样本
+            
             val_set_X = repeated_val_set_X[:self.B]     
             val_set_X_ori = repeated_val_set_X_ori[:self.B]  
         
-        # 随机选择self.B个样本
+        
         if test_X.shape[0] > self.B:
-            # 生成随机索引
+           
             indices = torch.randperm(test_X.shape[0])[:self.B]
-            # 使用索引选择样本
+            
             test_X = test_X[indices]
             test_X_ori = test_X_ori[indices]
             test_indicating_mask = test_indicating_mask[indices]
         elif test_X.shape[0] < self.B:
-            # 如果样本数量不足self.B，则需要进行重复采样
-            num_repeats = (self.B + test_X.shape[0] - 1) // test_X.shape[0]  # 向上取整
-            # 重复数据集
+            
+            num_repeats = (self.B + test_X.shape[0] - 1) // test_X.shape[0]  
+            
             repeated_test_X = test_X.repeat(num_repeats, 1, 1)
             repeated_test_X_ori = test_X_ori.repeat(num_repeats, 1, 1)
             repeated_test_indicating_mask = test_indicating_mask.repeat(num_repeats, 1, 1)
-            # 从重复后的数据集中选择self.B个样本
+           
             test_X = repeated_test_X[:self.B]
             test_X_ori = repeated_test_X_ori[:self.B]     
             test_indicating_mask = repeated_test_indicating_mask[:self.B]  
@@ -193,75 +193,75 @@ class STSGM(nn.Module):
         B = x.shape[0]
         x = x.to('cuda:0')
         ori_x = x.clone()
-        # 检测并填充张量中的NaN值(保持原始维度)
+       
         if torch.isnan(x).any():
-            # 对每个样本的每个通道分别处理
+           
             for b in range(B):
                 for c in range(x.shape[2]):
-                    # 获取当前样本当前通道的序列
+                  
                     seq = x[b, :, c]
                     mask = torch.isnan(seq)
-                    # 如果存在NaN值
+                   
                     if mask.any():
-                        # 获取非NaN索引和值
+                       
                         valid_indices = torch.nonzero(~mask).squeeze()
                         valid_values = seq[~valid_indices]
                         
-                        # 获取NaN索引
+                        
                         nan_indices = torch.nonzero(mask).squeeze()
                         
-                        # 如果没有有效值，则填充为0
+                       
                         if valid_indices.numel() == 0:
                             seq[nan_indices] = 0.0
                             continue
                             
-                        # 对每个NaN位置进行线性插值
+                        
                         if nan_indices.numel() == 1:
                             idx = nan_indices.item()
                             left_idx = valid_indices[valid_indices < idx]
                             right_idx = valid_indices[valid_indices > idx]
 
                             if left_idx.numel() > 0 and right_idx.numel() > 0:
-                                    # 两边都有值，执行线性插值
+                                   
                                 left_idx = left_idx[-1]
                                 right_idx = right_idx[0]
                                 left_val = seq[left_idx]
                                 right_val = seq[right_idx]
-                                    # 计算权重进行线性插值
+                                  
                                 weight = (idx - left_idx).float() / (right_idx - left_idx).float()
                                 seq[idx] = left_val + weight * (right_val - left_val)
                             elif left_idx.numel() > 0:
-                                    # 只有左侧有有效值，使用左侧最近的值
+                                  
                                 seq[idx] = seq[left_idx[-1]]
                             elif right_idx.numel() > 0:
-                                    # 只有右侧有有效值，使用右侧最近的值
+                                   
                                 seq[idx] = seq[right_idx[0]]
                             else:
-                                    # 理论上不会到这里，因为前面已经检查了有效值的存在性
+                                   
                                 seq[idx] = 0.0
                         else:
                             for idx in nan_indices:
-                                # 找到左侧和右侧最近的有效值
+                               
                                 left_idx = valid_indices[valid_indices < idx]
                                 right_idx = valid_indices[valid_indices > idx]
 
                                 if left_idx.numel() > 0 and right_idx.numel() > 0:
-                                    # 两边都有值，执行线性插值
+                                   
                                     left_idx = left_idx[-1]
                                     right_idx = right_idx[0]
                                     left_val = seq[left_idx]
                                     right_val = seq[right_idx]
-                                    # 计算权重进行线性插值
+                                  
                                     weight = (idx - left_idx).float() / (right_idx - left_idx).float()
                                     seq[idx] = left_val + weight * (right_val - left_val)
                                 elif left_idx.numel() > 0:
-                                    # 只有左侧有有效值，使用左侧最近的值
+                                   
                                     seq[idx] = seq[left_idx[-1]]
                                 elif right_idx.numel() > 0:
-                                    # 只有右侧有有效值，使用右侧最近的值
+                                   
                                     seq[idx] = seq[right_idx[0]]
                                 else:
-                                    # 理论上不会到这里，因为前面已经检查了有效值的存在性
+                        
                                     seq[idx] = 0.0
         x = x.permute(0, 2, 1)
         x = F.interpolate(x, size=(self.pool_sizes[0],),mode='area')
@@ -302,16 +302,7 @@ class STSGM(nn.Module):
         return f.permute(0, 2, 1)
         
     def mask_random_sample(self, x: torch.Tensor, pool_size: int) -> torch.Tensor:
-        """
-        使用掩码方式对输入的三维张量(B,C,L)进行随机采样，保持时序顺序
-
-        Args:
-            x: 输入张量，形状为(B,C,L)
-            pool_size: 需要采样的点数
-
-        Returns:
-            采样后的张量，形状为(B,C,pool_size)
-        """
+      
         B, C, L = x.shape
 
         # 确保pool_size不大于序列长度
